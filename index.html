@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="德國良嵂特貨空運成本與批價計算工具">
+  <title>德國進口成本計算</title>
+  <link rel="icon" href="assets/app-icon.png" type="image/png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">算</div>
+        <div>
+          <p class="eyebrow">IMPORT COST</p>
+          <h1>德國進口成本</h1>
+        </div>
+      </div>
+      <div class="phase-badge"><span></span>德國廠商專用</div>
+      <nav aria-label="主要功能">
+        <button class="nav-item active" data-page="calculator"><span>01</span>特貨空運</button>
+        <button class="nav-item nav-subitem" data-page="result"><span>↳</span>空運結果</button>
+        <button class="nav-item hidden" data-page="sea-calculator"><span>02</span>海運集貨</button>
+        <button class="nav-item nav-subitem hidden" data-page="sea-result"><span>↳</span>海運結果</button>
+        <button class="nav-item" data-page="history"><span>02</span>歷史成本紀錄</button>
+        <button class="nav-item" data-page="settings"><span>03</span>運費設定</button>
+      </nav>
+      <div class="storage-note">
+        <strong>本機儲存</strong>
+        <p>所有設定與紀錄僅保存在這台裝置的瀏覽器中。</p>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="page-eyebrow">SPECIAL AIR FREIGHT</p>
+          <h2 id="page-title">特貨空運成本試算</h2>
+        </div>
+        <div class="today" id="today"></div>
+      </header>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+      <section id="page-calculator" class="page active" aria-labelledby="page-title">
+        <div class="page-grid calculator-layout">
+          <form id="calculator-form" class="panel form-panel" novalidate>
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">BASIC INFORMATION</p>
+                <h3>商品與報價資料</h3>
+              </div>
+              <button type="button" class="text-button" id="reset-calculator">清除重填</button>
+            </div>
+
+            <div class="form-grid">
+              <label class="field field-wide">
+                <span>商品名稱 <b>*</b></span>
+                <input id="product-name" name="productName" type="text" required maxlength="100" placeholder="例如：保健食品 A">
+              </label>
+              <label class="field">
+                <span>國家 <b>*</b></span>
+                <select id="country" name="countryId" required></select>
+              </label>
+              <label class="field">
+                <span>幣別</span>
+                <input id="currency" name="currency" type="text" readonly placeholder="自動帶入">
+              </label>
+              <label class="field field-wide">
+                <span>廠商 <b>*</b></span>
+                <select id="vendor" name="vendorId" required disabled>
+                  <option value="">請先選擇國家</option>
+                </select>
+                <small id="vendor-rate-hint" class="field-hint"></small>
+              </label>
+              <label class="field">
+                <span>商品原幣單價 <b>*</b></span>
+                <div class="input-with-unit"><input id="unit-price" name="unitPrice" type="number" required min="0.0001" step="0.0001" inputmode="decimal" placeholder="0.00"><em id="price-unit">原幣</em></div>
+              </label>
+              <label class="field" id="air-standard-exchange-field">
+                <span>本次實際匯率 <b>*</b></span>
+                <div class="input-with-unit"><input id="exchange-rate" name="exchangeRate" type="number" required min="0.000001" step="0.000001" inputmode="decimal" placeholder="0.000000"><em>兌 TWD</em></div>
+              </label>
+              <label class="field hidden" id="air-krw-to-usd-field">
+                <span>韓元兌美元匯率 <b>*</b></span>
+                <div class="input-with-unit"><input id="air-krw-to-usd" type="number" min="0.000000001" step="0.000000001" inputmode="decimal" placeholder="例如 0.00072"><em>USD／KRW</em></div>
+                <small class="field-hint">1 韓元等於多少美元</small>
+              </label>
+              <label class="field hidden" id="air-usd-to-twd-field">
+                <span>美元兌台幣匯率 <b>*</b></span>
+                <div class="input-with-unit"><input id="air-usd-to-twd" type="number" min="0.000001" step="0.000001" inputmode="decimal" placeholder="例如 32"><em>TWD／USD</em></div>
+                <small class="field-hint">1 美元等於多少台幣</small>
+              </label>
+              <label class="field hidden" id="air-thailand-exchange-field">
+                <span>泰銖換算方式</span>
+                <input type="text" value="1 THB = 1 TWD（固定）" readonly>
+                <small class="field-hint">泰國商品不需輸入匯率</small>
+              </label>
+              <label class="field field-wide">
+                <span>商品實際重量 <b>*</b></span>
+                <div class="input-with-unit"><input id="weight-g" name="weightG" type="number" required min="0.01" step="0.01" inputmode="decimal" placeholder="0"><em>g</em></div>
+              </label>
+              <label class="field field-wide">
+                <span>毛利率 <b>*</b></span>
+                <div class="input-with-unit"><input id="margin-rate" name="marginRate" type="number" required min="0" max="99.99" step="0.01" inputmode="decimal" placeholder="例如 30"><em>%</em></div>
+                <small class="field-hint">輸入 30 即代表 30%；批價＝成本 ÷（1－毛利率）。</small>
+              </label>
+            </div>
+
+            <div id="conditional-options" class="conditional-options hidden">
+              <p class="option-title">本次價格調整</p>
+              <label id="option-germany" class="check-card hidden">
+                <input id="germany-discount" type="checkbox">
+                <span><strong>德國打 9 折</strong><small>商品原幣單價 × 0.9</small></span>
+              </label>
+              <label id="option-australia-discount" class="check-card hidden">
+                <input id="australia-discount" type="checkbox">
+                <span><strong>澳洲打 9.1 折</strong><small>商品原幣單價 × 0.91</small></span>
+              </label>
+              <label id="option-australia-surcharge" class="check-card hidden">
+                <input id="australia-surcharge" type="checkbox">
+                <span><strong>澳洲外加 4%</strong><small>折扣後商品金額 × 1.04</small></span>
+              </label>
+              <label id="option-manual-freight" class="field manual-freight hidden">
+                <span>鼎勝實際運費 <b>*</b></span>
+                <div class="input-with-unit"><input id="actual-freight" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"><em>TWD</em></div>
+              </label>
+            </div>
+
+            <label class="field note-field">
+              <span>備註</span>
+              <textarea id="notes" name="notes" rows="3" maxlength="500" placeholder="可記錄批次、報價日期或其他補充"></textarea>
+            </label>
+
+            <div id="form-error" class="alert error hidden" role="alert"></div>
+            <div class="form-actions">
+              <button type="submit" class="button primary">計算成本</button>
+              <button type="button" id="save-record" class="button secondary" disabled>儲存紀錄</button>
+            </div>
+            <p id="edit-indicator" class="edit-indicator hidden"></p>
+          </form>
+
+          <aside class="panel quick-guide">
+            <p class="section-kicker">QUICK GUIDE</p>
+            <h3>試算小提醒</h3>
+            <ol>
+              <li><span>1</span><div><strong>選國家與廠商</strong><p>系統會自動套用對應幣別與運費。</p></div></li>
+              <li><span>2</span><div><strong>填本次真實資料</strong><p>每次輸入實際匯率、重量與毛利率。</p></div></li>
+              <li><span>3</span><div><strong>先計算再儲存</strong><p>確認成本與建議批價後，再存入歷史紀錄。</p></div></li>
+            </ol>
+            <div class="scope-card"><strong>本版計算範圍</strong><p>德國良嵂商品成本 ＋ 空運費</p><small>不含關稅、營業稅、報關費與倉租</small></div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="page-result" class="page" aria-labelledby="page-title">
+        <div id="result-empty" class="empty-state panel">
+          <div class="empty-icon">∑</div><h3>尚未產生試算結果</h3><p>請先填寫商品資料並按下「計算成本」。</p>
+          <button class="button primary" data-go="calculator">前往成本試算</button>
+        </div>
+        <div id="result-content" class="hidden">
+          <div class="result-hero">
+            <div><p class="section-kicker">LANDED UNIT COST</p><h3 id="result-product"></h3><p id="result-context"></p></div>
+            <div class="total-cost"><span>含運單件成本</span><strong id="result-total"></strong><small>新台幣</small></div>
+          </div>
+          <div class="metric-grid">
+            <article class="metric-card"><span>調整後原幣金額</span><strong id="result-foreign"></strong><small id="result-adjustment"></small></article>
+            <article class="metric-card"><span>商品台幣成本</span><strong id="result-product-twd"></strong><small id="result-rate"></small></article>
+            <article class="metric-card accent"><span>本次運費</span><strong id="result-freight"></strong><small id="result-freight-rule"></small></article>
+            <article class="metric-card"><span>毛利率</span><strong id="result-margin-rate"></strong><small>依表單輸入</small></article>
+            <article class="metric-card"><label class="field"><span>預想成本（批價計算基礎）</span><div class="input-with-unit"><input id="expected-cost" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="輸入預想成本"><em>TWD</em></div></label><small>自行輸入想採用的成本金額</small></article>
+            <article class="metric-card accent"><span>建議批價</span><strong id="result-wholesale-price"></strong><small>預想成本 ÷（1－毛利率）</small></article>
+          </div>
+          <div class="panel explanation-panel">
+            <div class="panel-heading"><div><p class="section-kicker">CALCULATION DETAILS</p><h3>成本計算說明</h3></div><button class="button secondary compact" id="result-save">儲存這筆紀錄</button></div>
+            <div id="calculation-steps" class="calculation-steps"></div>
+            <div id="result-notes" class="result-notes hidden"></div>
+            <div class="copy-summary-panel">
+              <div class="copy-summary-heading">
+                <div>
+                  <strong>可複製成本說明</strong>
+                  <small>可直接貼到訊息或請款資料中</small>
+                </div>
+                <button type="button" class="button secondary compact" id="copy-summary">複製說明</button>
+              </div>
+              <textarea id="copy-summary-text" rows="5" readonly aria-label="可複製成本說明"></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-sea-calculator" class="page hidden" aria-labelledby="page-title">
+        <div class="page-grid calculator-layout">
+          <form id="sea-calculator-form" class="panel form-panel" novalidate>
+            <div class="panel-heading">
+              <div><p class="section-kicker">CONSOLIDATED SEA FREIGHT</p><h3>海運商品與稅率資料</h3></div>
+              <button type="button" class="text-button" id="reset-sea-calculator">清除重填</button>
+            </div>
+            <div class="form-grid">
+              <label class="field field-wide"><span>商品名稱 <b>*</b></span><input id="sea-product-name" type="text" required maxlength="100" placeholder="例如：日本生活用品"></label>
+              <label class="field"><span>國家 <b>*</b></span><select id="sea-country" required></select></label>
+              <label class="field"><span>幣別</span><input id="sea-currency" type="text" readonly placeholder="自動帶入"></label>
+              <label class="field field-wide"><span>廠商 <b>*</b></span><select id="sea-vendor" required disabled><option value="">請先選擇國家</option></select><small id="sea-rate-hint" class="field-hint"></small></label>
+              <label class="field"><span>商品原幣單價 <b>*</b></span><div class="input-with-unit"><input id="sea-unit-price" type="number" required min="0.0001" step="0.0001" inputmode="decimal" placeholder="0.00"><em id="sea-price-unit">原幣</em></div></label>
+              <label class="field" id="sea-standard-exchange-field"><span>本次實際匯率 <b>*</b></span><div class="input-with-unit"><input id="sea-exchange-rate" type="number" required min="0.000001" step="0.000001" inputmode="decimal" placeholder="0.000000"><em>兌 TWD</em></div></label>
+              <label class="field hidden" id="sea-krw-to-usd-field"><span>韓元兌美元匯率 <b>*</b></span><div class="input-with-unit"><input id="sea-krw-to-usd" type="number" min="0.000000001" step="0.000000001" inputmode="decimal" placeholder="例如 0.00072"><em>USD／KRW</em></div><small class="field-hint">1 韓元等於多少美元</small></label>
+              <label class="field hidden" id="sea-usd-to-twd-field"><span>美元兌台幣匯率 <b>*</b></span><div class="input-with-unit"><input id="sea-usd-to-twd" type="number" min="0.000001" step="0.000001" inputmode="decimal" placeholder="例如 32"><em>TWD／USD</em></div><small class="field-hint">1 美元等於多少台幣</small></label>
+              <label class="field field-wide"><span>關稅稅率 <b>*</b></span><div class="input-with-unit"><input id="sea-tariff-rate" type="number" required min="0" step="0.01" inputmode="decimal" placeholder="例如輸入 4"><em>%</em></div><small class="field-hint">輸入 4 即代表 4%，請勿輸入 0.04。</small></label>
+            </div>
+            <div id="sea-conditional-options" class="conditional-options hidden">
+              <p class="option-title">本次價格調整</p>
+              <label class="check-card"><input id="sea-zhang-discount" type="checkbox"><span><strong>張總打 9 折</strong><small>商品原幣單價 × 0.9</small></span></label>
+            </div>
+            <label class="field note-field"><span>備註</span><textarea id="sea-notes" rows="3" maxlength="500" placeholder="可記錄批次、報價日期或其他補充"></textarea></label>
+            <div id="sea-form-error" class="alert error hidden" role="alert"></div>
+            <div class="form-actions"><button type="submit" class="button primary">計算海運成本</button><button type="button" id="sea-save-record" class="button secondary" disabled>儲存紀錄</button></div>
+            <p id="sea-edit-indicator" class="edit-indicator hidden"></p>
+          </form>
+          <aside class="panel quick-guide sea-guide">
+            <p class="section-kicker">SEA FREIGHT RULES</p><h3>海運計算範圍</h3>
+            <ol>
+              <li><span>1</span><div><strong>限定集貨廠商</strong><p>日本信、韓國 VEL／HY、德國張總。</p></div></li>
+              <li><span>2</span><div><strong>按件計算運費</strong><p>不需要重量，使用設定中的平均每件運費。</p></div></li>
+              <li><span>3</span><div><strong>稅費完整計入</strong><p>關稅依輸入稅率，營業稅固定 5%。</p></div></li>
+            </ol>
+            <div class="scope-card"><strong>計算組成</strong><p>商品 ＋ 平均運費 ＋ 關稅 ＋ 營業稅</p><small>每筆紀錄保留當次費率與稅額快照</small></div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="page-sea-result" class="page hidden" aria-labelledby="page-title">
+        <div id="sea-result-empty" class="empty-state panel">
+          <div class="empty-icon">海</div><h3>尚未產生海運試算結果</h3><p>請先填寫海運商品資料並按下「計算海運成本」。</p>
+          <button class="button primary" data-go="sea-calculator">前往海運集貨試算</button>
+        </div>
+        <div id="sea-result-content" class="hidden">
+          <div class="result-hero sea-result-hero">
+            <div><p class="section-kicker">SEA LANDED UNIT COST</p><h3 id="sea-result-product"></h3><p id="sea-result-context"></p></div>
+            <div class="total-cost"><span>海運單件總成本</span><strong id="sea-result-total"></strong><small>已含關稅與 5% 營業稅</small></div>
+          </div>
+          <div class="metric-grid sea-metric-grid">
+            <article class="metric-card"><span>原幣商品單價</span><strong id="sea-result-original"></strong><small id="sea-result-discount-status"></small></article>
+            <article class="metric-card"><span>折扣後原幣單價</span><strong id="sea-result-adjusted"></strong><small id="sea-result-rate"></small></article>
+            <article class="metric-card"><span>商品台幣成本</span><strong id="sea-result-product-twd"></strong><small>折扣後價格 × 匯率</small></article>
+            <article class="metric-card accent"><span>平均每件運費</span><strong id="sea-result-freight"></strong><small>不依重量計算</small></article>
+            <article class="metric-card"><span>完稅價格</span><strong id="sea-result-dutiable"></strong><small>商品台幣成本 ＋ 平均運費</small></article>
+            <article class="metric-card"><span id="sea-result-tariff-label">關稅</span><strong id="sea-result-tariff"></strong><small>依本次輸入稅率</small></article>
+            <article class="metric-card"><span>營業稅</span><strong id="sea-result-business-tax"></strong><small>固定 5%，已計入總成本</small></article>
+          </div>
+          <div class="panel explanation-panel">
+            <div class="panel-heading"><div><p class="section-kicker">SEA CALCULATION DETAILS</p><h3>海運成本計算說明</h3></div><button class="button secondary compact" id="sea-result-save">儲存這筆紀錄</button></div>
+            <div id="sea-calculation-steps" class="calculation-steps"></div>
+            <div id="sea-result-notes" class="result-notes hidden"></div>
+            <div class="copy-summary-panel">
+              <div class="copy-summary-heading"><div><strong>可複製海運成本說明</strong><small>文字不列出營業稅，但總成本已包含</small></div><button type="button" class="button secondary compact" id="copy-sea-summary">複製成本說明</button></div>
+              <textarea id="sea-copy-summary-text" rows="5" readonly aria-label="可複製海運成本說明"></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-history" class="page" aria-labelledby="page-title">
+        <div class="toolbar">
+          <label class="search-box"><span aria-hidden="true">⌕</span><input id="history-search" type="search" placeholder="搜尋商品、國家、廠商或備註"></label>
+          <span id="history-count" class="record-count"></span>
+        </div>
+        <div id="history-empty" class="empty-state panel hidden"><div class="empty-icon">冊</div><h3>目前沒有歷史紀錄</h3><p>完成試算並儲存後，紀錄會出現在這裡。</p><button class="button primary" data-go="calculator">建立第一筆紀錄</button></div>
+        <div id="history-list" class="history-list"></div>
+      </section>
+
+      <section id="page-settings" class="page" aria-labelledby="page-title">
+        <div class="alert info">設定變更只會影響之後的新試算；既有歷史紀錄會保留當時計算快照。</div>
+        <div class="settings-grid">
+          <div class="panel settings-panel">
+            <div class="panel-heading"><div><p class="section-kicker">COUNTRY</p><h3>適用國家</h3></div><button class="button secondary compact hidden" id="add-country">新增國家</button></div>
+            <div id="country-settings-list" class="settings-list"></div>
+          </div>
+          <div class="panel settings-panel">
+            <div class="panel-heading"><div><p class="section-kicker">GERMAN VENDORS & AIR FREIGHT</p><h3>德國廠商與空運運費</h3></div><button class="button secondary compact hidden" id="add-vendor">新增廠商</button></div>
+            <div id="vendor-settings-list" class="settings-list"></div>
+          </div>
+          <div class="panel settings-panel sea-settings-panel hidden">
+            <div class="panel-heading"><div><p class="section-kicker">ZHANG SEA FREIGHT PER ITEM</p><h3>張總海運平均每件運費</h3></div></div>
+            <div id="sea-rate-settings-list" class="settings-list"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="country-dialog" class="modal">
+    <form id="country-form" method="dialog">
+      <div class="modal-heading"><h3 id="country-dialog-title">新增國家</h3><button type="button" class="icon-button" data-close="country-dialog" aria-label="關閉">×</button></div>
+      <input id="country-edit-id" type="hidden">
+      <label class="field"><span>國家名稱 <b>*</b></span><input id="setting-country-name" required maxlength="30"></label>
+      <label class="field"><span>幣別代碼 <b>*</b></span><input id="setting-country-currency" required maxlength="6" placeholder="例如 EUR"></label>
+      <label class="toggle-row"><span><strong>啟用國家</strong><small>停用後不會出現在試算選單</small></span><input id="setting-country-active" type="checkbox" checked></label>
+      <div id="country-form-error" class="alert error hidden"></div>
+      <div class="modal-actions"><button type="button" class="button ghost" data-close="country-dialog">取消</button><button type="submit" class="button primary">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="sea-rate-dialog" class="modal">
+    <form id="sea-rate-form" method="dialog">
+      <div class="modal-heading"><h3>修改海運每件運費</h3><button type="button" class="icon-button" data-close="sea-rate-dialog" aria-label="關閉">×</button></div>
+      <input id="sea-rate-edit-id" type="hidden">
+      <div class="setting-identity"><strong id="sea-rate-vendor-label"></strong><small id="sea-rate-country-label"></small></div>
+      <label class="field"><span>平均每件運費 <b>*</b></span><div class="input-with-unit"><input id="setting-sea-rate" type="number" required min="0" step="0.01" inputmode="decimal"><em>TWD／件</em></div></label>
+      <label class="toggle-row"><span><strong>啟用海運集貨</strong><small>停用後不會出現在海運試算選單</small></span><input id="setting-sea-rate-active" type="checkbox" checked></label>
+      <div id="sea-rate-form-error" class="alert error hidden"></div>
+      <div class="modal-actions"><button type="button" class="button ghost" data-close="sea-rate-dialog">取消</button><button type="submit" class="button primary">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="vendor-dialog" class="modal">
+    <form id="vendor-form" method="dialog">
+      <div class="modal-heading"><h3 id="vendor-dialog-title">新增廠商</h3><button type="button" class="icon-button" data-close="vendor-dialog" aria-label="關閉">×</button></div>
+      <input id="vendor-edit-id" type="hidden">
+      <label class="field"><span>所屬國家 <b>*</b></span><select id="setting-vendor-country" required></select></label>
+      <label class="field"><span>廠商名稱 <b>*</b></span><input id="setting-vendor-name" required maxlength="50"></label>
+      <label class="field"><span>運費方式</span><select id="setting-freight-mode"><option value="rate">每公斤運費</option><option value="manual">每次手動輸入台幣運費</option><option value="unset">尚未設定</option></select></label>
+      <div id="rate-fields" class="two-columns">
+        <label class="field"><span>每公斤費率 <b>*</b></span><input id="setting-rate" type="number" min="0.0001" step="0.0001" inputmode="decimal"></label>
+        <label class="field"><span>費率幣別</span><select id="setting-rate-currency"><option value="TWD">TWD 新台幣</option><option value="LOCAL">商品當地幣別</option></select></label>
+      </div>
+      <label class="toggle-row"><span><strong>啟用廠商</strong><small>停用後不會出現在試算選單</small></span><input id="setting-vendor-active" type="checkbox" checked></label>
+      <div id="vendor-form-error" class="alert error hidden"></div>
+      <div class="modal-actions"><button type="button" class="button ghost" data-close="vendor-dialog">取消</button><button type="submit" class="button primary">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="modal confirm-modal">
+    <form method="dialog"><div class="modal-heading"><h3>刪除成本紀錄？</h3></div><p>刪除後無法復原，其他紀錄不會受影響。</p><div class="modal-actions"><button value="cancel" class="button ghost">取消</button><button value="confirm" class="button danger">確認刪除</button></div></form>
+  </dialog>
+
+  <script src="core.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
