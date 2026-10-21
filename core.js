@@ -93,6 +93,7 @@
 
     const totalTwd = round(productTwd + freightTwd);
     const marginRate = toNumber(input.marginRate);
+    const wholesalePrice = round(totalTwd / (1 - marginRate / 100), 2);
     return {
       country: clone(country),
       vendor: clone(vendor),
@@ -110,9 +111,8 @@
       freightLocal: freightLocal == null ? null : round(freightLocal),
       freightTwd: round(freightTwd),
       totalTwd,
-      pricingCostTwd: null,
       marginRate: round(marginRate, 2),
-      wholesalePrice: null
+      wholesalePrice
     };
   }
 
@@ -232,11 +232,7 @@
       : `${calculation.currency} 單價 ${formatSummaryNumber(calculation.unitPrice)}${adjustment}`;
     lines.push(`${calculation.vendor.name}｜${unitPriceDescription}｜${exchangeDescription}｜重量 ${formatSummaryNumber(calculation.weightG)}g｜${freightCondition}。`);
     lines.push(`含運單件成本為 NT$${formatSummaryNumber(calculation.totalTwd, 2, 2)}。`);
-    if (calculation.pricingCostTwd != null && calculation.wholesalePrice != null) {
-      lines.push(`以預想成本 NT$${formatSummaryNumber(calculation.pricingCostTwd, 2, 2)}、毛利率 ${formatSummaryNumber(calculation.marginRate)}% 計算，建議批價 NT$${formatSummaryNumber(calculation.wholesalePrice, 2, 2)}（預想成本 ÷（1－毛利率））。`);
-    } else {
-      lines.push(`毛利率 ${formatSummaryNumber(calculation.marginRate)}%；請輸入預想成本後計算建議批價。`);
-    }
+    lines.push(`毛利率 ${formatSummaryNumber(calculation.marginRate)}%，建議批價 NT$${formatSummaryNumber(calculation.wholesalePrice, 2, 2)}（含運單件成本 ÷（1－毛利率））。`);
     return lines.join('\n');
   }
 

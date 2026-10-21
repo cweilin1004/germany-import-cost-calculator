@@ -24,18 +24,19 @@
   settings.version = 3;
   let records = load(KEYS.records, []);
   records.forEach(record => {
-    if (recordType(record) !== 'air' || !record.calculation || Object.prototype.hasOwnProperty.call(record.input, 'expectedCost')) return;
+    if (recordType(record) !== 'air' || !record.calculation) return;
     const calculation = record.calculation;
-    calculation.pricingCostTwd = null;
-    calculation.wholesalePrice = null;
-    record.input.expectedCost = null;
+    delete calculation.pricingCostTwd;
+    delete record.input.expectedCost;
+    if (Number.isFinite(calculation.marginRate) && calculation.marginRate >= 0 && calculation.marginRate < 100) {
+      calculation.wholesalePrice = Core.round(calculation.totalTwd / (1 - calculation.marginRate / 100), 2);
+    }
     record.summary = Core.buildCostSummary(record.input, calculation);
   });
   let latestAir = null;
   let latestSea = null;
   let editingAirRecordId = null;
   let editingSeaRecordId = null;
-  let pendingExpectedCost = null;
   let pendingDeleteId = null;
 
   const air = {
@@ -132,10 +133,9 @@
     if (event) event.preventDefault(); clearError(air.error); const input = readAirForm();
     try {
       const calculation = Core.calculateCost(input, settings);
-      const normalized = { ...input, unitPrice: Number(input.unitPrice), exchangeRate: input.exchangeRate === '' ? null : Number(input.exchangeRate), krwToUsd: input.krwToUsd === '' ? null : Number(input.krwToUsd), usdToTwd: input.usdToTwd === '' ? null : Number(input.usdToTwd), weightG: Number(input.weightG), marginRate: Number(input.marginRate), expectedCost: pendingExpectedCost == null || pendingExpectedCost === '' ? null : Number(pendingExpectedCost), actualFreight: input.actualFreight === '' ? null : Number(input.actualFreight) };
-      latestAir = { transportType: 'air', input: normalized, calculation, summary: '' };
-      pendingExpectedCost = null;
-      renderAirResult(latestAir); updateExpectedCost(); navigate('result');
+      const normalized = { ...input, unitPrice: Number(input.unitPrice), exchangeRate: input.exchangeRate === '' ? null : Number(input.exchangeRate), krwToUsd: input.krwToUsd === '' ? null : Number(input.krwToUsd), usdToTwd: input.usdToTwd === '' ? null : Number(input.usdToTwd), weightG: Number(input.weightG), marginRate: Number(input.marginRate), actualFreight: input.actualFreight === '' ? null : Number(input.actualFreight) };
+      latestAir = { transportType: 'air', input: normalized, calculation, summary: Core.buildCostSummary(normalized, calculation) };
+      air.save.disabled = false; $('#result-save').disabled = false; renderAirResult(latestAir); navigate('result');
     } catch (error) { showError(error.validationErrors || error.message, air.error); }
   }
   function airFreightRuleText(calc) {
@@ -148,13 +148,11 @@
   function renderAirResult(data) {
     if (!data) { $('#result-empty').classList.remove('hidden'); $('#result-content').classList.add('hidden'); return; }
     const { input, calculation: c } = data; $('#result-empty').classList.add('hidden'); $('#result-content').classList.remove('hidden');
-    $('#expected-cost').disabled = false;
     $('#result-product').textContent = input.productName; $('#result-context').textContent = `${c.country.name} · ${c.vendor.name} · ${number(c.weightG, 2)} g`; $('#result-total').textContent = money(c.totalTwd);
     $('#result-foreign').textContent = money(c.adjustedForeign, c.currency); $('#result-adjustment').textContent = c.adjustments.length ? c.adjustments.map(item => item.label).join('、') : '未套用折扣或加價';
     $('#result-product-twd').textContent = money(c.productTwd); $('#result-rate').textContent = c.krwToUsd && c.usdToTwd ? `1 KRW＝${number(c.krwToUsd, 12)} USD；1 USD＝${number(c.usdToTwd, 6)} TWD` : `匯率 ${number(c.exchangeRate, 6)}`; $('#result-freight').textContent = money(c.freightTwd); $('#result-freight-rule').textContent = airFreightRuleText(c);
     $('#result-margin-rate').textContent = `${number(c.marginRate, 2)}%`;
-    $('#expected-cost').value = input.expectedCost == null ? '' : input.expectedCost;
-    $('#result-wholesale-price').textContent = c.wholesalePrice == null ? '請輸入預想成本' : money(c.wholesalePrice);
+    $('#result-wholesale-price').textContent = money(c.wholesalePrice);
     const priceParts = [`${number(c.unitPrice, 4)} ${c.currency}`]; c.adjustments.forEach(item => priceParts.push(`× ${item.multiplier}`));
     let freightFormula = '採用本次輸入的實際台幣運費';
     if (c.vendor.mode !== 'manual' && c.vendor.rateCurrency === 'LOCAL') freightFormula = `${number(c.weightKg, 4)} kg × ${number(c.vendor.rate, 4)} ${c.currency}／kg × 匯率 ${number(c.exchangeRate, 6)}`;
@@ -169,27 +167,10 @@
     } else steps.push({ title: '商品台幣成本', formula: `${number(c.adjustedForeign, 6)} ${c.currency} × 匯率 ${number(c.exchangeRate, 6)}`, result: money(c.productTwd) });
     steps.push({ title: '特貨空運費', formula: freightFormula, result: money(c.freightTwd) });
     steps.push({ title: '含運單件成本', formula: `${money(c.productTwd)} ＋ ${money(c.freightTwd)}`, result: money(c.totalTwd), total: true });
-    steps.push({ title: '建議批價', formula: c.pricingCostTwd == null ? '請於上方輸入預想成本後計算' : `${money(c.pricingCostTwd)} ÷（1－${number(c.marginRate, 2)}%）`, result: c.wholesalePrice == null ? '尚未計算' : money(c.wholesalePrice), total: true });
+    steps.push({ title: '建議批價', formula: `${money(c.totalTwd)} ÷（1－${number(c.marginRate, 2)}%）`, result: money(c.wholesalePrice), total: true });
     renderSteps($('#calculation-steps'), steps);
     const note = $('#result-notes'); note.classList.toggle('hidden', !input.notes); note.innerHTML = input.notes ? `<strong>備註</strong><p>${escapeHtml(input.notes).replace(/\n/g, '<br>')}</p>` : '';
     $('#copy-summary-text').value = Core.buildCostSummary(input, c);
-  }
-  function updateExpectedCost() {
-    if (!latestAir) return;
-    const raw = $('#expected-cost').value.trim(); const value = Number(raw); const valid = raw !== '' && Number.isFinite(value) && value > 0;
-    latestAir.input.expectedCost = valid ? value : null;
-    latestAir.calculation.pricingCostTwd = valid ? value : null;
-    latestAir.calculation.wholesalePrice = valid ? Core.round(value / (1 - latestAir.calculation.marginRate / 100), 2) : null;
-    latestAir.summary = Core.buildCostSummary(latestAir.input, latestAir.calculation);
-    $('#result-wholesale-price').textContent = valid ? money(latestAir.calculation.wholesalePrice) : '請輸入預想成本';
-    $('#copy-summary-text').value = latestAir.summary;
-    const pricingStep = $('#calculation-steps').lastElementChild;
-    if (pricingStep) {
-      pricingStep.querySelector('p').textContent = valid ? `${money(value)} ÷（1－${number(latestAir.calculation.marginRate, 2)}%）` : '請於上方輸入預想成本後計算';
-      pricingStep.querySelector('em').textContent = valid ? money(latestAir.calculation.wholesalePrice) : '尚未計算';
-    }
-    air.save.disabled = !valid || (!!latestAir.id && !editingAirRecordId);
-    $('#result-save').disabled = !valid || (!!latestAir.id && !editingAirRecordId);
   }
 
   // 海運集貨
@@ -259,13 +240,12 @@
   }
   function saveRecord(type) {
     const data = type === 'sea' ? latestSea : latestAir; const editingId = type === 'sea' ? editingSeaRecordId : editingAirRecordId; if (!data) return;
-    if (type === 'air' && (data.calculation.pricingCostTwd == null || data.calculation.wholesalePrice == null)) { toast('請先輸入預想成本，完成建議批價計算'); return; }
     records = Core.upsertRecord(records, data, editingId, new Date().toISOString());
     if (type === 'sea') { editingSeaRecordId = null; updateSeaEditIndicator(); sea.save.disabled = true; $('#sea-result-save').disabled = true; }
-    else { editingAirRecordId = null; updateAirEditIndicator(); air.save.disabled = true; $('#result-save').disabled = true; $('#expected-cost').disabled = true; }
+    else { editingAirRecordId = null; updateAirEditIndicator(); air.save.disabled = true; $('#result-save').disabled = true; }
     persist(); toast(editingId ? '歷史紀錄已更新' : '成本紀錄已儲存');
   }
-  function resetAirCalculator() { air.form.reset(); editingAirRecordId = null; pendingExpectedCost = null; latestAir = null; clearError(air.error); renderAirCountryOptions(); onAirCountryChange(); updateAirEditIndicator(); renderAirResult(null); }
+  function resetAirCalculator() { air.form.reset(); editingAirRecordId = null; latestAir = null; clearError(air.error); renderAirCountryOptions(); onAirCountryChange(); updateAirEditIndicator(); renderAirResult(null); }
   function resetSeaCalculator() { sea.form.reset(); editingSeaRecordId = null; latestSea = null; clearError(sea.error); renderSeaCountryOptions(); onSeaCountryChange(); updateSeaEditIndicator(); renderSeaResult(null); }
   function updateAirEditIndicator() { const node = $('#edit-indicator'); node.classList.toggle('hidden', !editingAirRecordId); node.textContent = editingAirRecordId ? '目前正在修改既有特貨空運紀錄；儲存後會更新原紀錄。' : ''; }
   function updateSeaEditIndicator() { const node = $('#sea-edit-indicator'); node.classList.toggle('hidden', !editingSeaRecordId); node.textContent = editingSeaRecordId ? '目前正在修改既有海運集貨紀錄；儲存後會更新原紀錄。' : ''; }
@@ -276,7 +256,6 @@
       editingSeaRecordId = id; latestSea = null; updateSeaEditIndicator(); updateSeaVendorRule(); navigate('sea-calculator');
     } else {
       renderAirCountryOptions(input.countryId); onAirCountryChange(input.vendorId); air.productName.value = input.productName; air.unitPrice.value = input.unitPrice; air.exchangeRate.value = input.exchangeRate == null ? '' : input.exchangeRate; air.krwToUsd.value = input.krwToUsd == null ? '' : input.krwToUsd; air.usdToTwd.value = input.usdToTwd == null ? '' : input.usdToTwd; air.weightG.value = input.weightG; air.marginRate.value = input.marginRate == null ? '' : input.marginRate; air.german.checked = !!input.germanyDiscount; air.auDiscount.checked = !!input.australiaDiscount; air.auSurcharge.checked = !!input.australiaSurcharge; air.actualFreight.value = input.actualFreight == null ? '' : input.actualFreight; air.notes.value = input.notes || '';
-      pendingExpectedCost = input.expectedCost == null ? null : input.expectedCost;
       editingAirRecordId = id; latestAir = null; updateAirEditIndicator(); updateAirVendorRule(); navigate('calculator');
     }
     toast('已載入紀錄，修改後請重新計算');
@@ -284,7 +263,7 @@
   function viewRecord(id) {
     const record = records.find(item => item.id === id); if (!record) return;
     if (recordType(record) === 'sea') { latestSea = Core.clone(record); renderSeaResult(latestSea); $('#sea-result-save').disabled = true; navigate('sea-result'); }
-    else { latestAir = Core.clone(record); renderAirResult(latestAir); $('#expected-cost').disabled = true; $('#result-save').disabled = true; air.save.disabled = true; navigate('result'); }
+    else { latestAir = Core.clone(record); renderAirResult(latestAir); $('#result-save').disabled = true; air.save.disabled = true; navigate('result'); }
   }
   function requestDelete(id) { pendingDeleteId = id; $('#confirm-dialog').showModal(); }
   function deleteRecord(id) {
@@ -300,7 +279,7 @@
       const c = record.calculation; const isSea = recordType(record) === 'sea'; const typeLabel = isSea ? '海運集貨' : '特貨空運';
       const context = isSea ? `${c.country.name} · ${c.vendor.name} · 關稅 ${number(c.tariffRate)}%` : `${c.country.name} · ${c.vendor.name} · ${number(c.weightG, 2)} g`;
       const costLabel = isSea ? '海運單件總成本' : '含運單件成本';
-      const detail = isSea ? `商品 ${money(c.productTwd)} ＋ 運費 ${money(c.perItemFreight)} ＋ 稅費 ${money(c.tariffAmount + c.businessTaxAmount)}` : `商品 ${money(c.productTwd)} ＋ 運費 ${money(c.freightTwd)} · ${c.pricingCostTwd == null ? '尚未輸入預想成本' : `預想成本 ${money(c.pricingCostTwd)} · 毛利 ${number(c.marginRate, 2)}% · 批價 ${money(c.wholesalePrice)}`}`;
+      const detail = isSea ? `商品 ${money(c.productTwd)} ＋ 運費 ${money(c.perItemFreight)} ＋ 稅費 ${money(c.tariffAmount + c.businessTaxAmount)}` : `商品 ${money(c.productTwd)} ＋ 運費 ${money(c.freightTwd)} · 毛利 ${number(c.marginRate, 2)}% · 批價 ${money(c.wholesalePrice)}`;
       return `<article class="history-card"><div class="history-main"><div class="history-date"><span class="transport-badge ${isSea ? 'sea' : 'air'}">${typeLabel}</span>${escapeHtml(dateTime(record.updatedAt || record.createdAt))}</div><h3>${escapeHtml(record.input.productName)}</h3><p>${escapeHtml(context)}</p>${record.input.notes ? `<small>${escapeHtml(record.input.notes)}</small>` : ''}</div><div class="history-cost"><span>${costLabel}</span><strong>${escapeHtml(money(c.totalTwd))}</strong><small>${escapeHtml(detail)}</small></div><div class="history-actions"><button data-action="view" data-id="${record.id}" class="button ghost compact">查看</button><button data-action="edit" data-id="${record.id}" class="button secondary compact">修改</button><button data-action="delete" data-id="${record.id}" class="icon-button delete" aria-label="刪除 ${escapeHtml(record.input.productName)}">×</button></div></article>`;
     }).join('');
   }
@@ -353,7 +332,7 @@
   function bindEvents() {
     $$('.nav-item').forEach(node => node.addEventListener('click', () => navigate(node.dataset.page))); $$('[data-go]').forEach(node => node.addEventListener('click', () => navigate(node.dataset.go)));
     air.country.addEventListener('change', () => onAirCountryChange()); air.vendor.addEventListener('change', updateAirVendorRule); air.form.addEventListener('submit', calculateAir); $('#reset-calculator').addEventListener('click', resetAirCalculator);
-    air.save.addEventListener('click', () => saveRecord('air')); $('#result-save').addEventListener('click', () => saveRecord('air')); $('#expected-cost').addEventListener('input', updateExpectedCost); $('#copy-summary').addEventListener('click', () => copyField($('#copy-summary-text'), '成本說明已複製')); $$('#calculator-form input, #calculator-form textarea').forEach(node => node.addEventListener('input', invalidateAir));
+    air.save.addEventListener('click', () => saveRecord('air')); $('#result-save').addEventListener('click', () => saveRecord('air')); $('#copy-summary').addEventListener('click', () => copyField($('#copy-summary-text'), '成本說明已複製')); $$('#calculator-form input, #calculator-form textarea').forEach(node => node.addEventListener('input', invalidateAir));
     sea.country.addEventListener('change', () => onSeaCountryChange()); sea.vendor.addEventListener('change', updateSeaVendorRule); sea.form.addEventListener('submit', calculateSea); $('#reset-sea-calculator').addEventListener('click', resetSeaCalculator);
     sea.save.addEventListener('click', () => saveRecord('sea')); $('#sea-result-save').addEventListener('click', () => saveRecord('sea')); $('#copy-sea-summary').addEventListener('click', () => copyField($('#sea-copy-summary-text'), '海運成本說明已複製')); $$('#sea-calculator-form input, #sea-calculator-form textarea').forEach(node => node.addEventListener('input', invalidateSea));
     $('#history-search').addEventListener('input', renderHistory); $('#history-list').addEventListener('click', event => { const button = event.target.closest('[data-action]'); if (!button) return; ({ view: viewRecord, edit: editRecord, delete: requestDelete })[button.dataset.action](button.dataset.id); });
